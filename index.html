@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Todo List</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* A little extra style for a smooth transition on status change */
+        .task-item {
+            transition: all 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 font-sans">
+    <div class="container mx-auto mt-10 p-4 max-w-2xl">
+        <div class="bg-white rounded-lg shadow-xl p-6">
+            <h1 class="text-3xl font-bold text-slate-800 text-center mb-6">My Tasks</h1>
+
+            <!-- Form to Add New Tasks -->
+            <form id="add-task-form" class="flex gap-3 mb-6">
+                <input 
+                    type="text" 
+                    id="new-task-input" 
+                    placeholder="What do you need to do?" 
+                    class="flex-grow p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition"
+                    required
+                >
+                <button 
+                    type="submit" 
+                    class="bg-blue-600 text-white font-semibold px-6 py-3 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition shadow"
+                >
+                    Add Task
+                </button>
+            </form>
+
+            <!-- Loading Spinner -->
+            <div id="loading" class="text-center py-4 text-slate-500">
+                <p>Loading tasks...</p>
+            </div>
+
+            <!-- Task List -->
+            <div id="task-list" class="space-y-3">
+                <!-- Tasks will be dynamically inserted here by JavaScript -->
+            </div>
+
+            <!-- Error Message Display -->
+            <div id="error-message" class="hidden mt-4 p-4 bg-red-100 text-red-700 border border-red-300 rounded-lg"></div>
+        </div>
+        <footer class="text-center mt-6 text-slate-500 text-sm">
+            <p>Built with Flask & JavaScript</p>
+        </footer>
+    </div>
+
+    <script>
+        // --- JavaScript Frontend Logic ---
+        
+        // Configuration
+        const API_BASE_URL = 'http://127.0.0.1:5000'; // The URL of our Flask backend
+
+        // DOM Element References
+        const taskList = document.getElementById('task-list');
+        const addTaskForm = document.getElementById('add-task-form');
+        const newTaskInput = document.getElementById('new-task-input');
+        const loadingIndicator = document.getElementById('loading');
+        const errorMessageDiv = document.getElementById('error-message');
+
+        // --- Core Functions ---
+
+        /**
+         * Shows an error message on the UI.
+         * @param {string} message - The error message to display.
+         */
+        function showError(message) {
+            errorMessageDiv.textContent = `Error: ${message}. Make sure your Python backend server is running.`;
+            errorMessageDiv.classList.remove('hidden');
+        }
+
+        /**
+         * Hides the error message.
+         */
+        function clearError() {
+            errorMessageDiv.textContent = '';
+            errorMessageDiv.classList.add('hidden');
+        }
+
+        /**
+         * Fetches all tasks from the backend API and displays them.
+         * This function is called when the page loads.
+         */
+        async function fetchAndDisplayTasks() {
+            loadingIndicator.style.display = 'block';
+            taskList.innerHTML = '';
+            clearError();
+
+            try {
+                // The 'fetch' function is the modern way to make API requests in the browser.
+                const response = await fetch(`${API_BASE_URL}/tasks`);
+                if (!response.ok) {
+                    throw new Error(`Server responded with status: ${response.status}`);
+                }
+                const tasks = await response.json();
+                
+                if (tasks.length === 0) {
+                    taskList.innerHTML = '<p class="text-center text-slate-500">No tasks yet. Add one above!</p>';
+                } else {
+                    tasks.forEach(task => {
+                        const taskElement = createTaskElement(task);
+                        taskList.appendChild(taskElement);
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to fetch tasks:', error);
+                showError(error.message);
+            } finally {
+                loadingIndicator.style.display = 'none';
+            }
+        }
+
+        /**
+         * Creates an HTML element for a single task.
+         * @param {object} task - The task object with id, text, and status.
+         * @returns {HTMLElement} - The div element representing the task.
+         */
+        function createTaskElement(task) {
+            const div = document.createElement('div');
+            div.className = 'task-item flex items-center justify-between p-3 bg-slate-50 rounded-lg border border-slate-200';
+            div.dataset.taskId = task.id; // Store task ID on the element
+
+            const isDone = task.status === 'Done';
+
+            // Apply different styles if the task is done
+            if (isDone) {
+                div.classList.add('opacity-60');
+            }
+
+            // Task text
+            const textSpan = document.createElement('span');
+            textSpan.textContent = task.text;
+            textSpan.className = `flex-grow ${isDone ? 'line-through text-slate-500' : 'text-slate-800'}`;
+
+            // Action buttons (Status and Delete)
+            const buttonsDiv = document.createElement('div');
+            buttonsDiv.className = 'flex items-center gap-2';
+
+            // Status toggle button
+            const statusButton = document.createElement('button');
+            statusButton.textContent = isDone ? 'Mark as Not Done' : 'Mark as Done';
+            statusButton.className = `text-sm font-medium px-3 py-1 rounded-full transition ${isDone ? 'bg-yellow-200 text-yellow-800 hover:bg-yellow-300' : 'bg-green-200 text-green-800 hover:bg-green-300'}`;
+            statusButton.onclick = () => toggleTaskStatus(task.id, task.status);
+            
+            // Delete button
+            const deleteButton = document.createElement('button');
+            deleteButton.innerHTML = '&times;'; // A simple 'x' character for delete
+            deleteButton.className = 'font-bold text-red-500 hover:text-red-700 w-6 h-6 rounded-full flex items-center justify-center bg-red-100 hover:bg-red-200 transition';
+            deleteButton.onclick = () => deleteTask(task.id);
+
+            buttonsDiv.appendChild(statusButton);
+            buttonsDiv.appendChild(deleteButton);
+
+            div.appendChild(textSpan);
+            div.appendChild(buttonsDiv);
+
+            return div;
+        }
+
+        /**
+         * Handles the form submission to add a new task.
+         * @param {Event} event - The form submission event.
+         */
+        async function handleAddTask(event) {
+            event.preventDefault(); // Prevents the webpage from reloading
+            const taskText = newTaskInput.value.trim();
+
+            if (!taskText) return;
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/tasks`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: taskText })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server responded with status: ${response.status}`);
+                }
+                
+                // Clear the input and refresh the list to show the new task
+                newTaskInput.value = '';
+                fetchAndDisplayTasks();
+
+            } catch (error) {
+                console.error('Failed to add task:', error);
+                showError(error.message);
+            }
+        }
+
+        /**
+         * Toggles the status of a task ('Done' / 'Not Done').
+         * @param {string} taskId - The ID of the task to update.
+         * @param {string} currentStatus - The current status of the task.
+         */
+        async function toggleTaskStatus(taskId, currentStatus) {
+            const newStatus = currentStatus === 'Done' ? 'Not Done' : 'Done';
+            try {
+                const response = await fetch(`${API_BASE_URL}/tasks/${taskId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: newStatus })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server responded with status: ${response.status}`);
+                }
+
+                fetchAndDisplayTasks(); // Refresh the whole list to show the change
+
+            } catch (error) {
+                console.error('Failed to update task status:', error);
+                showError(error.message);
+            }
+        }
+        
+        /**
+         * Deletes a task.
+         * @param {string} taskId - The ID of the task to delete.
+         */
+        async function deleteTask(taskId) {
+            // A simple confirmation before deleting was removed as it can cause issues in some environments.
+            try {
+                const response = await fetch(`${API_BASE_URL}/tasks/${taskId}`, {
+                    method: 'DELETE'
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Server responded with status: ${response.status}`);
+                }
+                
+                fetchAndDisplayTasks(); // Refresh the list
+
+            } catch (error) {
+                console.error('Failed to delete task:', error);
+                showError(error.message);
+            }
+        }
+
+        // --- Event Listeners and Initial Load ---
+
+        // Add an event listener to the form to call handleAddTask on submission
+        addTaskForm.addEventListener('submit', handleAddTask);
+        
+        // When the page first loads, fetch and display the tasks
+        document.addEventListener('DOMContentLoaded', fetchAndDisplayTasks);
+    </script>
+</body>
+</html>
+

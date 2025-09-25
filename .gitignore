@@ -1,0 +1,9 @@
+# Ignore the Python virtual environment folder
+venv/
+
+# Ignore the Google Cloud service account key (VERY IMPORTANT FOR SECURITY)
+service-account-key.json
+
+# Ignore Python cache files
+__pycache__/
+*.pyc
