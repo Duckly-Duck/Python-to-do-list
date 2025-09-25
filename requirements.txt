@@ -1,0 +1,6 @@
+# This file lists the Python packages that our app needs.
+# Render will automatically install these using 'pip install -r requirements.txt'.
+Flask
+Flask-Cors
+google-cloud-firestore
+gunicorn
